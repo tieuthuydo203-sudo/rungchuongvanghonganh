@@ -868,6 +868,16 @@
 .scan-item .scan-letter{margin-left:auto;font-size:22px;font-weight:900;color:#fbbf24}
 .scan-item .scan-name{font-weight:700}
 .scan-item .av svg{width:36px;height:36px;display:block;border-radius:50%}
+.build-tag{font-size:12px;color:rgba(255,255,255,.6);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:3px 10px;white-space:nowrap}
+.scan-sec{grid-column:1/-1;font-weight:900;font-size:15px;margin-top:10px;color:#fde68a}
+.scan-sec:first-child{margin-top:0}
+.scan-empty{grid-column:1/-1;color:rgba(255,255,255,.6);font-size:14px;padding:2px}
+.scan-item.miss{opacity:.6;border:1.5px dashed rgba(255,255,255,.3);background:transparent}
+.scan-item.miss .scan-mark{color:rgba(255,255,255,.6)}
+.scan-item.out{opacity:.45;background:rgba(255,255,255,.04)}
+.scan-item.out .scan-name{text-decoration:line-through}
+.scan-item.out .scan-mark{color:#ff8a8a}
+.scan-num{background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.5);border-radius:999px;padding:1px 7px;font-size:13px;font-weight:900;color:#fde68a;white-space:nowrap}
 #printArea{display:none}
 .print-head{font-size:12pt;margin-bottom:6mm}
 .print-grid{display:grid;grid-template-columns:1fr 1fr;gap:6mm}.print-grid.large{grid-template-columns:1fr}.print-grid.large .qrcard-qr{width:85mm;height:85mm}.print-grid.large .qrcard-qr canvas{width:85mm;height:85mm}.print-grid.large .qrcard-name{font-size:22pt}.print-grid.huge{grid-template-columns:1fr}.print-grid.huge .qrcard-qr{width:150mm;height:150mm}.print-grid.huge .qrcard-qr canvas{width:150mm;height:150mm}.print-grid.huge .qrcard-name{font-size:24pt}
@@ -989,6 +999,7 @@
               <button class="btn" id="btnRoom">📱 Phòng điện thoại</button>
               <button class="btn" id="btnCards">🃏 In thẻ QR</button>
               <button class="btn" id="btnStats">📊 Thống kê</button>
+              <span class="build-tag" id="buildTag" title="Phiên bản file đang mở — dùng để kiểm tra xem bạn đã mở đúng bản mới nhất chưa">Bản 13/11/2026 · quét xa 5m · bảng quét</span>
               <span class="room-live" id="roomLive" style="display:none"></span>
               <button class="btn danger" id="btnReset">🔁 Chơi lại</button>
             </div>
@@ -1799,6 +1810,7 @@ Chấp nhận các biến thể: “Câu 1.” hoặc chỉ “1.” thay cho �
       <h2>📷 Máy quét thẻ QR</h2>
       <div class="sub" id="scanStatus">Đang chờ kết nối phòng…</div>
       <div class="scan-meta"><span id="scanPin"></span> · <span id="scanQuestion"></span> · Đã quét <b id="scanCount">0</b>/<span id="scanTotal">0</span><span id="scanResult"></span></div>
+      <div class="sub build-tag">Bản 13/11/2026 · quét xa 5m · bảng quét</div>
     </div>
     <div class="scan-camwrap"><video id="scanVideo" playsinline muted autoplay></video><div id="scanOverlay"></div></div>
     <div class="scan-actions">
@@ -13037,7 +13049,7 @@ function lockQuestionNow() {
         g.eliminated[i] = !g.eliminated[i];
         if (g.eliminated[i]) sndOut(); else sndBack();
         save(); renderAll();
-        roomMirrorIdx(i);
+        roomMirrorIdx(i); roomPublishOutIdx();
       }
 
       /* ================= Cứu trợ & phao ================= */
@@ -15326,6 +15338,8 @@ function lockQuestionNow() {
         if (!room.pin || !fbReady()) return;
         fbUpdate(roomPath() + '/st', obj).catch(function () {});
       }
+      /* Đồng bộ danh sách bị loại cho máy quét (để hiện "Đã loại — không cần quét"). */
+      function roomPublishOutIdx() { if (!room.pin || !fbReady()) return; roomPubSt({ outIdx: outIdx() }); }
       function roomPublishQuestion() {
         if (!room.pin || !fbReady()) return;
         var g = state.game, q = curQuestions()[g.current];
@@ -15335,7 +15349,7 @@ function lockQuestionNow() {
           imgUrl: q && q.imgUrl ? q.imgUrl : '', imgLocal: q && q.img ? 1 : 0,
           video: q && q.video ? q.video : '',
           endsAt: Date.now() + Math.max(0, timer.remainMs), seconds: state.settings.seconds,
-          rescuesLeft: g.rescuesLeft, planeLeft: g.planeLeft
+          rescuesLeft: g.rescuesLeft, planeLeft: g.planeLeft, outIdx: outIdx()
         });
       }
       function roomPublishLocked() { roomPubSt({ locked: true, endsAt: 0 }); }
@@ -15432,7 +15446,7 @@ function lockQuestionNow() {
           upd[base + 'lastCorrect'] = correct;
         });
         upd['st/revealed'] = true; upd['st/locked'] = true; upd['st/correct'] = q.a;
-        upd['st/phase'] = g.phase; upd['st/endsAt'] = 0;
+        upd['st/phase'] = g.phase; upd['st/endsAt'] = 0; upd['st/outIdx'] = outIdx();
         fbUpdate(roomPath(), upd).catch(function () {});
       }
       function roomMirrorIdx(i) {
@@ -16138,24 +16152,56 @@ function openFirebaseModal() {
       function scanRender() {
         var st = scan.snap ? scan.snap.st : null;
         var qEl = $('scanQuestion'); if (qEl) qEl.textContent = st ? ('Câu ' + ((st.current || 0) + 1) + (st.phase ? ' · ' + st.phase : '')) : 'Chưa có câu hỏi';
-        var keys = Object.keys(scan.map);
-        var cEl = $('scanCount'); if (cEl) cEl.textContent = keys.length;
-        var tEl = $('scanTotal'); if (tEl) tEl.textContent = scan.roster.length;
+        /* Học sinh đã bị loại: đọc từ st/outIdx (giáo viên đồng bộ khi loại tay
+           hoặc chốt câu), dự phòng từ players có out=true (phòng cũ). */
+        var outSet = {};
+        if (st && Array.isArray(st.outIdx)) st.outIdx.forEach(function (i) { outSet[i] = true; });
+        else if (scan.snap && scan.snap.players) {
+          Object.keys(scan.snap.players).forEach(function (pid) {
+            var p = scan.snap.players[pid];
+            if (p && p.out === true && typeof p.idx === 'number') outSet[p.idx] = true;
+          });
+        }
+        var roster = scan.roster || [];
+        var scannedKeys = Object.keys(scan.map).map(Number).filter(function (i) { return !outSet[i]; }).sort(function (a, b) { return a - b; });
+        var alive = [];
+        for (var ri = 0; ri < roster.length; ri++) if (!outSet[ri]) alive.push(ri);
+        var notScanned = alive.filter(function (i) { return scan.map[i] == null; });
+        var outList = Object.keys(outSet).map(Number).sort(function (a, b) { return a - b; });
+        var cEl = $('scanCount'); if (cEl) cEl.textContent = scannedKeys.length;
+        var tEl = $('scanTotal'); if (tEl) tEl.textContent = alive.length;
         var list = $('scanList'); if (!list) return;
         list.innerHTML = '';
         var correct = (st && typeof st.correct === 'number') ? st.correct : -1;
         var okCount = 0, badCount = 0;
-        keys.sort(function (a, b) { return a - b; }).forEach(function (k) {
-          var i = Number(k), letter = scan.map[k];
+        function secTitle(txt) { var h = document.createElement('div'); h.className = 'scan-sec'; h.textContent = txt; list.appendChild(h); }
+        function emptyLine(txt) { var e = document.createElement('div'); e.className = 'scan-empty'; e.textContent = txt; list.appendChild(e); }
+        function item(i, cls, mark, letter) {
+          var d = document.createElement('div'); d.className = cls;
+          d.innerHTML = '<span class="scan-num">Số ' + (i + 1) + '</span><span class="av">' + avatarFor(i, 36) + '</span><span class="scan-name">' + esc(scan.roster[i] || ('Học sinh ' + (i + 1))) + '</span><span class="scan-mark">' + mark + '</span>' + (letter ? '<span class="scan-letter">' + letter + '</span>' : '');
+          list.appendChild(d);
+        }
+        /* Đã quét (câu này, còn trên sàn) — số thứ tự để giáo viên đối chiếu, không sót bạn nào. */
+        secTitle('✅ Đã quét (' + scannedKeys.length + '/' + alive.length + ' còn trên sàn)');
+        if (!scannedKeys.length) emptyLine('Chưa có bạn nào quét — giơ thẻ vào khung hình.');
+        scannedKeys.forEach(function (i) {
+          var letter = scan.map[i];
           /* Dap an dung chi co trong phong khi giao vien da chot cau (truoc do phong co tinh
              de correct = -1 de hoc sinh khong doc duoc dap an som). Chua chot: the da quet
              hien vien vang + dau tick de van nhan biet duoc ngay. */
           var li = 'ABCD'.indexOf(letter), cls = 'scan-item pending', mark = '✓';
           if (correct >= 0) { if (li === correct) { cls = 'scan-item ok'; mark = '✔'; okCount++; } else { cls = 'scan-item bad'; mark = '✘'; badCount++; } }
-          var d = document.createElement('div'); d.className = cls;
-          d.innerHTML = '<span class="av">' + avatarFor(i, 36) + '</span><span class="scan-name">' + esc(scan.roster[i] || ('Học sinh ' + (i + 1))) + '</span><span class="scan-mark">' + mark + '</span><span class="scan-letter">' + letter + '</span>';
-          list.appendChild(d);
+          item(i, cls, mark, letter);
         });
+        /* Chưa quét (còn trên sàn mà chưa quét) — nhắc các bạn giơ thẻ. */
+        secTitle('⏳ Chưa quét (' + notScanned.length + ') — nhắc các bạn giơ thẻ');
+        if (!notScanned.length) emptyLine('Cả lớp đã quét đủ.');
+        notScanned.forEach(function (i) { item(i, 'scan-item miss', '○', ''); });
+        /* Đã loại — nhắc các bạn không quét nữa, đỡ mất thời gian. */
+        if (outList.length) {
+          secTitle('🚫 Đã loại — không cần quét (' + outList.length + ')');
+          outList.forEach(function (i) { item(i, 'scan-item out', '✕', ''); });
+        }
         var rEl = $('scanResult'); if (rEl) rEl.textContent = (correct >= 0) ? (' · ✔ ' + okCount + ' đúng · ✘ ' + badCount + ' sai') : '';
         var sEl = $('scanStatus'); if (sEl) sEl.textContent = scan.running ? 'Đang quét — giơ thẻ vào khung hình.' : 'Camera chưa bật — bấm “📷 Bật camera” để bắt đầu quét.';
       }
