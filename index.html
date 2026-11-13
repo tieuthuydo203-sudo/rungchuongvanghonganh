@@ -12158,24 +12158,19 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
     (function () {
       'use strict';
       /* ================= Dữ liệu mặc định ================= */
-      var DEFAULT_STUDENTS = (function () {
-        var r = [];
-        for (var i = 1; i <= 48; i++) r.push('Học sinh ' + (i < 10 ? '0' + i : '' + i));
-        return r;
-      })();
+      var DEFAULT_STUDENTS = [
+        'Đào Văn An', 'Hồ Hoàng Bảo Anh', 'Trần Đức Duy', 'Nguyễn Quang Huy', 'Đặng Khánh Linh',
+        'Nguyễn Bảo Tuấn Khang', 'Nguyễn Diễm My', 'Nguyễn Bảo Nam', 'Phạm Hữu Nguyên', 'Đinh Nguyễn Nhật Quang',
+        'Nguyễn Minh Thắng', 'Vũ Chí Thuận', 'Trần Hữu Khánh Thịnh', 'Trần Minh Nhật', 'Bùi Tuấn Nhật',
+        'Phan Huyền Minh Thư', 'Nguyễn Lê Thanh Trúc', 'Dương Tấn Hào', 'Dương Vũ Hồng Anh', 'Phí Đức Thi',
+        'Hoàng Lê Tường Vy'
+      ];
       var DEFAULT_QUESTIONS = [
-        { q: 'Amine là hợp chất hữu cơ được tạo thành khi thay thế một hay nhiều nguyên tử hiđro trong phân tử nào sau đây bằng gốc hiđrocacbon?', o: ['Nước (H₂O)', 'Amoniac (NH₃)', 'Metan (CH₄)', 'Axit axetic (CH₃COOH)'], a: 1 },
-        { q: 'Chất CH₃–NH–CH₃ thuộc loại amine bậc mấy?', o: ['Amine bậc một', 'Amine bậc ba', 'Amine bậc hai', 'Không phải là amine'], a: 2 },
-        { q: 'Tên gọi của amine có công thức CH₃CH₂NH₂ là gì?', o: ['Ethylamine', 'Methylamine', 'Dimethylamine', 'Propylamine'], a: 0 },
-        { q: 'Ở điều kiện thường, methylamine có trạng thái và tính tan như thế nào?', o: ['Chất lỏng, không tan trong nước', 'Chất rắn, tan tốt trong nước', 'Chất khí, có mùi khai, tan tốt trong nước', 'Chất khí không mùi, không tan trong nước'], a: 2 },
-        { q: 'Nhỏ dung dịch methylamine vào giấy quỳ tím ẩm, quỳ tím chuyển sang màu gì?', o: ['Đỏ', 'Không đổi màu', 'Vẫn giữ màu tím', 'Xanh'], a: 3 },
-        { q: 'Trong các chất sau, chất nào có tính base yếu nhất?', o: ['Methylamine', 'Aniline (C₆H₅NH₂)', 'Amoniac (NH₃)', 'Ethylamine'], a: 1 },
-        { q: 'Cho methylamine tác dụng với dung dịch HCl, sản phẩm thu được là muối nào?', o: ['CH₃NH₃Cl (methylamoni clorua)', 'CH₃Cl (clorometan)', 'NH₄Cl (amoni clorua)', 'CH₃NH₂·H₂O'], a: 0 },
-        { q: 'Nhỏ nước brom vào dung dịch aniline, hiện tượng quan sát được là gì?', o: ['Dung dịch chuyển sang màu xanh lam', 'Xuất hiện kết tủa trắng', 'Sủi bọt khí rất mạnh', 'Không có hiện tượng gì'], a: 1 },
-        { q: 'Aniline tác dụng với dung dịch HCl tạo thành muối có công thức nào?', o: ['C₆H₅NH₃Cl', 'C₆H₅Cl', 'C₆H₅NH₂Cl₂', 'C₆H₆NHCl'], a: 0 },
-        { q: 'Aniline là nguyên liệu quan trọng trong công nghiệp để sản xuất mặt hàng nào?', o: ['Phân đạm urê', 'Phẩm nhuộm và dược phẩm', 'Chất dẻo PVC', 'Thuốc nổ TNT'], a: 1 },
-        { q: 'Trong công nghiệp, aniline được điều chế bằng cách nào?', o: ['Khử nitrobenzen bằng Fe trong dung dịch HCl', 'Cho benzen tác dụng trực tiếp với NH₃', 'Thủy phân protein động vật', 'Cộng NH₃ vào axetilen'], a: 0 },
-        { q: 'Amine bậc một tác dụng với axit nitrơ (HNO₂) ở nhiệt độ thấp (0–5 °C) sẽ giải phóng khí nào?', o: ['Khí H₂', 'Khí O₂', 'Khí N₂', 'Khí CO₂'], a: 2 }
+        { q: 'Mắt xích -CH<sub>2</sub> – CH(CH<sub>3</sub>)- là mắt xích của polymer nào?', o: ['Polypropylene', 'Polystyrene', 'poly(vinyl chloride)', 'polyethylene'], a: 0 },
+        { q: 'Monomer nào trùng hợp tạo ra PVC?', o: ['CH<sub>2</sub>=CH<sub>2</sub>', 'CH<sub>2</sub>=CH–Cl', 'CH<sub>2</sub>=CH–CH<sub>3</sub>', 'CH<sub>2</sub>=CH–C<sub>6</sub>H<sub>5</sub>'], a: 1 },
+        { q: 'Vì sao PE thường được sử dụng làm túi đựng hàng hóa?', o: ['PE dễ tan trong nước', 'PE dẫn điện tốt', 'PE nhẹ, mềm dẻo và ít thấm nước', 'PE phân hủy sinh học nhanh'], a: 2 },
+        { q: 'Trong hồ sơ M-01, nhận định nào đúng về rác nhựa ở biển?', o: ['Mọi loại chất dẻo đều phân hủy nhanh trong nước biển', 'Rác thải nhựa không ảnh hưởng tới sinh vật biển', 'Rác thải nhựa có thể gây hại khi sinh vật nuốt phải hoặc mắc kẹt', 'Rác nhựa chỉ gây hại khi bị đốt cháy.'], a: 2 },
+        { q: 'Phán quyết phù hợp nhất sau khi điều tra hồ sơ M-01?', o: ['Ngừng hoàn toàn việc sử dụng mọi loại nhựa', 'Sử dụng chất dẻo hợp lý, giảm nhựa một lần, thu gom đúng cách', 'Ưu tiên sử dụng đồ nhựa dùng một lần', 'Thải nhựa ra biển vì nhựa sẽ tan trong nước biển'], a: 1 }
       ];
       var LS_KEY = 'rcv_game_v1';
       var LETTERS = ['A', 'B', 'C', 'D'];
@@ -12484,10 +12479,10 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
       }
       function defaultState() {
         return {
-          settings: { className: 'Lớp 12', topic: 'Ôn tập Hóa học 12 – Amine', seconds: 15, sound: true, bgmOn: false, view: 'teacher', qrUrl: '', theme: 'gold' },
+          settings: { className: 'Lớp 12A1', topic: 'CHẤT DẺO', seconds: 15, sound: true, bgmOn: false, view: 'teacher', qrUrl: '', theme: 'gold' },
           questions: deepCopy(DEFAULT_QUESTIONS),
           students: DEFAULT_STUDENTS.slice(),
-          classes: [{ name: 'Lớp 12', students: DEFAULT_STUDENTS.slice() }],
+          classes: [{ name: 'Lớp 12A1', students: DEFAULT_STUDENTS.slice() }],
           activeClass: 0,
           game: freshGame(DEFAULT_STUDENTS.length)
         };
@@ -12498,6 +12493,10 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
           if (!raw) return null;
           var s = JSON.parse(raw);
           if (!s || !s.settings || !Array.isArray(s.questions) || !Array.isArray(s.students) || !s.game) return null;
+          // Đề cứng: bản lưu cũ là bộ mẫu Amine thì bỏ qua, dùng đề CHẤT DẺO đã gắn cứng trong file.
+          if (s.questions.length && typeof s.questions[0].q === 'string' && s.questions[0].q.indexOf('Amine là hợp chất hữu cơ') === 0) return null;
+          // Lớp cứng: bản lưu cũ là 25 tên chung tạm thì bỏ qua, dùng danh sách thật đã gắn cứng.
+          if (s.students.length === 25 && s.students[0] === 'Học sinh 01' && s.students[24] === 'Học sinh 25') return null;
           // Chuẩn hóa độ dài mảng loại theo danh sách hiện tại
           var el = [];
           for (var i = 0; i < s.students.length; i++) el.push(!!(s.game.eliminated && s.game.eliminated[i]));
