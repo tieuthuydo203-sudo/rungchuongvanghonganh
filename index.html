@@ -999,7 +999,7 @@
               <button class="btn" id="btnRoom">📱 Phòng điện thoại</button>
               <button class="btn" id="btnCards">🃏 In thẻ QR</button>
               <button class="btn" id="btnStats">📊 Thống kê</button>
-              <span class="build-tag" id="buildTag" title="Phiên bản file đang mở — dùng để kiểm tra xem bạn đã mở đúng bản mới nhất chưa">Bản 13/11/2026 · quét xa 5m · bảng quét</span>
+              <span class="build-tag" id="buildTag" title="Phiên bản file đang mở — dùng để kiểm tra xem bạn đã mở đúng bản mới nhất chưa">Bản 13/11/2026 · đồng vô địch + nhạc dừng</span>
               <span class="room-live" id="roomLive" style="display:none"></span>
               <button class="btn danger" id="btnReset">🔁 Chơi lại</button>
             </div>
@@ -1810,7 +1810,7 @@ Chấp nhận các biến thể: “Câu 1.” hoặc chỉ “1.” thay cho �
       <h2>📷 Máy quét thẻ QR</h2>
       <div class="sub" id="scanStatus">Đang chờ kết nối phòng…</div>
       <div class="scan-meta"><span id="scanPin"></span> · <span id="scanQuestion"></span> · Đã quét <b id="scanCount">0</b>/<span id="scanTotal">0</span><span id="scanResult"></span></div>
-      <div class="sub build-tag">Bản 13/11/2026 · quét xa 5m · bảng quét</div>
+      <div class="sub build-tag">Bản 13/11/2026 · đồng vô địch + nhạc dừng</div>
     </div>
     <div class="scan-camwrap"><video id="scanVideo" playsinline muted autoplay></video><div id="scanOverlay"></div></div>
     <div class="scan-actions">
@@ -12896,6 +12896,9 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
       }
       function onTimeUp() {
         stopTimerTrack();
+        /* Lưới an toàn: dừng lại lần nữa sau 600ms nếu có đường nào làm nhạc
+           bật lại (chỉ khi vẫn đang ở màn chờ chốt câu, không chặn câu sau). */
+        setTimeout(function () { var ph = state.game.phase; if (ph === 'question' || ph === 'golden') stopTimerTrack(); }, 600);
         state.game.locked = true; save();
         roomPublishLocked();
         sndTimeUp();
@@ -12946,6 +12949,9 @@ function lockQuestionNow() {
         var g = state.game;
         if (g.phase !== 'question' && g.phase !== 'golden') return;
         stopTimer(); stopTimerTrack();
+        /* Lưới an toàn: dừng lại lần nữa sau 600ms nếu có đường nào làm nhạc
+           bật lại (chỉ khi vẫn đang ở màn hiện đáp án, không chặn câu sau). */
+        setTimeout(function () { var ph = state.game.phase; if (ph === 'reveal' || ph === 'goldenReveal') stopTimerTrack(); }, 600);
         // Phòng điện thoại: bạn trả lời sai (hoặc không trả lời) tự rời sàn trước khi tính điểm
         if (g.phase === 'question' || g.phase === 'golden') roomApplyAnswers();
         // Chốt câu: mọi em còn trên sàn được +10 điểm; em đã rời sàn giữ nguyên điểm đã có
@@ -13004,11 +13010,14 @@ function lockQuestionNow() {
           var winners = alive.map(function (i) { return state.students[i]; });
           g.tieBreak = null;
           /* Nhiều bạn cùng đúng Câu Chuông Vàng: chọn 1 nhà vô địch theo tổng
-             thời gian trả lời (nhanh nhất). Chỉ áp dụng khi mọi bạn cùng đúng
-             đều có dữ liệu thời gian (chế độ điện thoại, đã trả lời ít nhất
+             thời gian trả lời (nhanh nhất). Chỉ áp dụng ở chế độ điện thoại,
+             khi mọi bạn cùng đúng đều có dữ liệu thời gian (đã trả lời ít nhất
              1 câu); câu nào không trả lời tính là hết giờ. Không có dữ liệu
-             (chơi bấm tay) hoặc hòa nhau đúng từng mili-giây thì giữ Đồng vô địch. */
-          if (alive.length > 1 && Array.isArray(g.ansTime) && Array.isArray(g.ansTimeQ)) {
+             (chơi bấm tay) hoặc hòa nhau đúng từng mili-giây thì giữ Đồng vô địch.
+             Chế độ Thẻ QR KHÔNG so thời gian: nhanh hay chậm là do giáo viên
+             quét trước hay quét sau, không phải do bạn đó trả lời nhanh — nên
+             mọi bạn đúng đều Đồng vô địch, cùng rung chuông vàng. */
+          if (alive.length > 1 && !isCardMode() && Array.isArray(g.ansTime) && Array.isArray(g.ansTimeQ)) {
             var hasData = alive.every(function (i) { return (g.ansTimeQ[i] || 0) > 0; });
             if (hasData) {
               var best = alive[0], bestT = g.ansTime[best] || 0, bi;
@@ -16517,7 +16526,7 @@ function openFirebaseModal() {
       /* Dừng bản nhạc tính giờ đang phát qua ô hiệu ứng (fxEls['timer']) — bản này
          chỉ chạy khi bấm "Nghe thử" trong Cài đặt. Nếu không dừng nó thì nhạc tính
          giờ vẫn vang sau khi chốt câu, dù timerEl đã dừng. */
-      function stopFxTimer() { var f = fxEls['timer']; if (f) { try { f.pause(); } catch (e) {} } }
+      function stopFxTimer() { var f = fxEls['timer']; if (f) { try { f.pause(); f.loop = false; f.currentTime = 0; } catch (e) {} } }
       function startTimerTrack() {
         stopFxTimer();
         if (timer.demo) return false;
@@ -16546,7 +16555,7 @@ function openFirebaseModal() {
         timerTrackWasPlaying = false;
         stopDefaultTimerMelody();
         stopFxTimer();
-        if (timerEl) { try { timerEl.pause(); } catch (e) {} }
+        if (timerEl) { try { timerEl.pause(); timerEl.loop = false; timerEl.currentTime = 0; } catch (e) {} }
         if (state.settings.bgmOn && customAudio.bgm) startBgm();
       }
       function pauseTimerTrack() {
@@ -16556,6 +16565,10 @@ function openFirebaseModal() {
       }
       function resumeTimerTrack() {
         if (!timerTrackWasPlaying) return;
+        /* Không phát lại nhạc sau khi đã chốt câu / kết thúc ván — chỉ phát
+           lại khi đang ở giữa câu hỏi (tạm dừng rồi tiếp tục). */
+        var ph = state.game.phase;
+        if (ph !== 'question' && ph !== 'golden') { timerTrackWasPlaying = false; return; }
         timerTrackWasPlaying = false;
         if (!customAudio.timer) { startDefaultTimerMelody(); return; }
         if (timerEl && timerEl.paused) { try { var p = timerEl.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
