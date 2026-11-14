@@ -1818,11 +1818,14 @@ Chấp nhận các biến thể: “Câu 1.” hoặc chỉ “1.” thay cho �
       <button class="btn" id="btnScanFlip">🔄 Đổi camera</button>
       <button class="btn" id="btnScanMirror">🪞 Gương: Tắt</button>
       <button class="btn gold" id="btnScanCalib">🎯 Căn chỉnh (1 lần)</button>
+      <button class="btn gold big" id="btnScanLock">✅ Chốt câu — hiện đáp án</button>
+      <button class="btn gold big" id="btnScanNext">➡️ Câu tiếp theo</button>
       <button class="btn" id="btnScanClear">🧹 Xóa đáp án câu này</button>
       <button class="btn danger" id="btnScanClose">✕ Đóng máy quét</button>
     </div>
     <div class="sub" id="scanHint">Giơ thẻ sao cho ô vuông đen lớn lọt vào khung hình. Xoay thẻ để chữ A, B, C hoặc D lên trên cùng — máy sẽ đọc đúng chữ đó. Quét lại cùng một thẻ để đổi đáp án. Thẻ đã quét hiện viền vàng; khi giáo viên chốt câu, đáp án đúng chuyển xanh, đáp án sai chuyển đỏ. Quét từ xa: thẻ dùng ô vuông lớn kiểu Wayground nên bắt được từ bục giảng, hướng camera về phía lớp và giữ yên vài giây để máy bắt nhiều thẻ cùng lúc; đủ sáng và thẻ không bị che sẽ nhạy hơn.</div>
     <div id="scanList" class="scan-list"></div>
+    <div id="scanOutList" class="scan-list"></div>
   </div>
   <div id="printArea"></div>
   <div class="overlay" id="modalCards">
@@ -12547,7 +12550,7 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
       function freshGame(nStudents) {
         var el = [], sc = [], at = [], aq = [];
         for (var i = 0; i < nStudents; i++) { el.push(false); sc.push(0); at.push(0); aq.push(0); }
-        return { phase: 'intro', current: 0, eliminated: el, scores: sc, locked: false, rescuesLeft: 2, planeLeft: true, winners: [], ansTime: at, ansTimeQ: aq, tieBreak: null, qStats: [], stuAtt: [], stuOk: [], qAliveSet: [] };
+        return { phase: 'intro', current: 0, eliminated: el, scores: sc, locked: false, rescuesLeft: 2, planeLeft: true, winners: [], ansTime: at, ansTimeQ: aq, tieBreak: null, qStats: [], stuAtt: [], stuOk: [], qAliveSet: [], qOut: [] };
       }
       function defaultState() {
         return {
@@ -12968,6 +12971,10 @@ function lockQuestionNow() {
           var attSet = Array.isArray(g.qAliveSet) ? g.qAliveSet : aliveIdx();
           var okSet = aliveIdx();
           g.qStats[g.current] = { att: attSet.length, ok: okSet.length };
+          /* Loại từng câu (để điện thoại quét kéo xuống xem): những bạn có mặt
+             lúc mở câu mà không còn trên sàn sau khi chốt. */
+          if (!Array.isArray(g.qOut)) g.qOut = [];
+          g.qOut[g.current] = attSet.filter(function (i) { return okSet.indexOf(i) === -1; });
           attSet.forEach(function (i) { g.stuAtt[i] = (g.stuAtt[i] || 0) + 1; });
           okSet.forEach(function (i) { if (attSet.indexOf(i) !== -1) g.stuOk[i] = (g.stuOk[i] || 0) + 1; });
         })();
@@ -15325,8 +15332,25 @@ function lockQuestionNow() {
       }
       function roomTeacherSnap() {
         if (!room.pin) return;
+        roomHandleScanCmd();
         roomSyncUnsyncedPlayers();
         renderRoomPanel(); renderRoomLive(); renderAll();
+      }
+      /* Lệnh từ máy quét (điện thoại giáo viên đang cầm): chốt câu / câu tiếp
+         theo / bắt đầu — để giáo viên không phải quay lại máy tính. Điện thoại
+         ghi st/cmd = {a, t}; máy tính thấy lệnh mới thì thực thi rồi xóa lệnh
+         (đặt cmd=null). lockQuestionNow/nextStep/mainAction đều tự bỏ qua nếu
+         không đúng pha nên lệnh cũ chạy lại cũng vô hại. */
+      function roomHandleScanCmd() {
+        var st = (room.snap && room.snap.st) || {};
+        var cmd = st.cmd;
+        if (!cmd || typeof cmd.t !== 'number' || !cmd.a) return;
+        if (room.lastCmdT && cmd.t <= room.lastCmdT) return;
+        room.lastCmdT = cmd.t;
+        fbUpdate(roomPath() + '/st', { cmd: null }).catch(function () {});
+        if (cmd.a === 'lock') lockQuestionNow();
+        else if (cmd.a === 'next') nextStep();
+        else if (cmd.a === 'start') mainAction();
       }
       /* Học sinh mới vào giữa ván: đồng bộ điểm / trạng thái sàn từ máy giáo viên (giáo viên là nguồn đúng) */
       function roomSyncUnsyncedPlayers() {
@@ -15357,7 +15381,7 @@ function lockQuestionNow() {
           q: q ? q.q : '', o: q ? q.o : [], correct: -1,
           imgUrl: q && q.imgUrl ? q.imgUrl : '', imgLocal: q && q.img ? 1 : 0,
           video: q && q.video ? q.video : '',
-          endsAt: Date.now() + Math.max(0, timer.remainMs), seconds: state.settings.seconds,
+          endsAt: Date.now() + Math.max(0, timer.remainMs), seconds: state.settings.seconds, total: total(),
           rescuesLeft: g.rescuesLeft, planeLeft: g.planeLeft, outIdx: outIdx()
         });
       }
@@ -15455,7 +15479,7 @@ function lockQuestionNow() {
           upd[base + 'lastCorrect'] = correct;
         });
         upd['st/revealed'] = true; upd['st/locked'] = true; upd['st/correct'] = q.a;
-        upd['st/phase'] = g.phase; upd['st/endsAt'] = 0; upd['st/outIdx'] = outIdx();
+        upd['st/phase'] = g.phase; upd['st/endsAt'] = 0; upd['st/outIdx'] = outIdx(); upd['st/qOut'] = g.qOut || [];
         fbUpdate(roomPath(), upd).catch(function () {});
       }
       function roomMirrorIdx(i) {
@@ -15490,7 +15514,7 @@ function lockQuestionNow() {
         var g = state.game, upd = {
           'st/phase': 'intro', 'st/current': 0, 'st/locked': false, 'st/revealed': false, 'st/paused': false,
           'st/q': '', 'st/o': [], 'st/correct': -1, 'st/endsAt': 0, 'st/winners': [], 'st/imgUrl': '', 'st/imgLocal': 0, 'st/video': '',
-          'st/rescuesLeft': g.rescuesLeft, 'st/planeLeft': g.planeLeft, 'st/seconds': state.settings.seconds
+          'st/rescuesLeft': g.rescuesLeft, 'st/planeLeft': g.planeLeft, 'st/seconds': state.settings.seconds, 'st/qOut': []
         };
         var players = roomPlayers();
         Object.keys(players).forEach(function (pid) {
@@ -16213,6 +16237,46 @@ function openFirebaseModal() {
         }
         var rEl = $('scanResult'); if (rEl) rEl.textContent = (correct >= 0) ? (' · ✔ ' + okCount + ' đúng · ✘ ' + badCount + ' sai') : '';
         var sEl = $('scanStatus'); if (sEl) sEl.textContent = scan.running ? 'Đang quét — giơ thẻ vào khung hình.' : 'Camera chưa bật — bấm “📷 Bật camera” để bắt đầu quét.';
+        /* Nút điều khiển trên điện thoại (không cần quay lại máy tính): Chốt câu
+           khi đang hỏi, Câu tiếp theo / Bắt đầu khi đã hiện đáp án hoặc mới mở. */
+        (function scanCtl() {
+          var ph = st ? st.phase : '';
+          var lockB = $('btnScanLock'), nextB = $('btnScanNext');
+          if (lockB) lockB.disabled = !(ph === 'question' || ph === 'golden');
+          if (nextB) {
+            if (ph === 'intro') { nextB.disabled = false; nextB.textContent = '▶ Bắt đầu Câu 1'; }
+            else if (ph === 'reveal' || ph === 'goldenReveal') { nextB.disabled = false; nextB.textContent = '➡️ Câu tiếp theo'; }
+            else { nextB.disabled = true; nextB.textContent = '➡️ Câu tiếp theo'; }
+          }
+        })();
+        /* Loại từng câu (kéo xuống xem để chốt bài): đọc st/qOut do máy tính
+           đồng bộ lúc chốt câu — mỗi câu liệt kê các bạn bị loại ở câu đó. */
+        (function scanOutPerQ() {
+          var outEl = $('scanOutList'); if (!outEl) return;
+          outEl.innerHTML = '';
+          var h = document.createElement('div'); h.className = 'scan-sec'; h.textContent = '📋 Loại từng câu — kéo xuống xem để chốt bài'; outEl.appendChild(h);
+          var qOut = st ? st.qOut : null;
+          /* qOut có thể là mảng hoặc object (Firebase lưu mảng thưa thành object). */
+          var arr = [];
+          if (Array.isArray(qOut)) arr = qOut;
+          else if (qOut && typeof qOut === 'object') Object.keys(qOut).forEach(function (k) { arr[Number(k)] = qOut[k]; });
+          var nQ = 0;
+          for (var qi = 0; qi < arr.length; qi++) if (arr[qi]) nQ = qi + 1;
+          if (!nQ) {
+            var e = document.createElement('div'); e.className = 'scan-empty'; e.textContent = 'Chưa chốt câu nào — chơi xong câu đầu, danh sách loại sẽ hiện ở đây.'; outEl.appendChild(e);
+            return;
+          }
+          var totalQ = (st && typeof st.total === 'number' && st.total > 0) ? st.total : 0;
+          for (var q2 = 0; q2 < nQ; q2++) {
+            var out = arr[q2] || [];
+            var row = document.createElement('div'); row.className = 'scan-item out'; row.style.gridColumn = '1/-1';
+            var isGolden = totalQ > 0 && q2 === totalQ - 1;
+            var label = isGolden ? '🔔 Câu ' + (q2 + 1) + ' (Chuông Vàng)' : 'Câu ' + (q2 + 1);
+            var names = out.map(function (i) { return 'Số ' + (i + 1) + ' ' + (scan.roster[i] || ('Học sinh ' + (i + 1))); }).join(', ');
+            row.innerHTML = '<span class="scan-name"><b>' + label + ':</b> ' + (out.length ? esc(names) + ' <span class="scan-mark">✕ ' + out.length + ' bạn</span>' : 'không ai bị loại') + '</span>';
+            outEl.appendChild(row);
+          }
+        })();
       }
       /* Hướng xoay của thẻ từ 4 góc mã QR (jsQR trả góc theo hướng của mã): lên=A, phải=B, xuống=C, trái=D */
       function scanLetterFromLocation(loc) {
@@ -16477,6 +16541,18 @@ function openFirebaseModal() {
         scan.map = {};
         if (has && fbReady()) fbUpdate('/rooms/' + scan.pin + '/players', upd).catch(function () {});
         scanRender();
+      });
+      /* Gửi lệnh điều khiển về máy tính qua Firebase (st/cmd): máy tính thấy
+         lệnh mới thì thực thi rồi xóa. Không cần quay lại máy tính để chốt
+         câu hay mở câu tiếp theo. */
+      function scanSendCmd(action) {
+        if (!fbReady() || !scan.pin) { toast('Chưa kết nối phòng — thử đóng rồi mở lại máy quét.'); return; }
+        fbUpdate('/rooms/' + scan.pin + '/st', { cmd: { a: action, t: Date.now() } }).catch(function () { toast('Không gửi được lệnh — kiểm tra mạng rồi thử lại.'); });
+      }
+      $('btnScanLock').addEventListener('click', function () { scanSendCmd('lock'); });
+      $('btnScanNext').addEventListener('click', function () {
+        var st = scan.snap ? scan.snap.st : null;
+        scanSendCmd(st && st.phase === 'intro' ? 'start' : 'next');
       });
       $('btnScanClose').addEventListener('click', function () {
         scanStopCamera();
